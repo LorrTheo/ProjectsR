@@ -1,0 +1,344 @@
+## \-\--
+
+title: "Back Injury RandomForest" author: "Matt Klingler" format: html editor: visual \-\--
+
+## Synopsis
+
+Back injuries can be very problematic, and deciphering a method to predict them based on body arrangement can be quite helpful. Understanding the relation of body positioning to the injury would allow for directed methods of prevention and treatment.
+
+## Libraries
+
+First we will load all of the possible libraries for this analysis.
+
+```{r Libraries}
+library(tidyverse)
+library(tidymodels)
+library(mice) 
+library(VIM) 
+library(ranger) 
+library(randomForest) 
+library(caret)
+library(skimr)
+library(GGally)
+library(gridExtra)
+library(vip)
+library(e1071)
+library(ROCR)
+```
+
+## Data
+
+For this analysis, we will read in a data set found on Kaggle, and then mutate the injury "class" variable to a factor.
+
+```{r Data}
+df <- read_csv("column_3C_weka.csv")
+df <- df %>% mutate(class = as_factor(class))
+
+```
+
+## Summary
+
+First, I like to run a few basic summary functions to explore the data statistically.
+
+```{r Summary}
+str(df)
+skim(df)
+summary(df)
+p1=ggplot(df, aes(y=degree_spondylolisthesis)) + geom_boxplot()
+p2=ggplot(df, aes(y=pelvic_radius)) + geom_boxplot()
+p3=ggplot(df, aes(y=sacral_slope)) + geom_boxplot()
+p4=ggplot(df, aes(y=lumbar_lordosis_angle)) + geom_boxplot()
+p5=ggplot(df, aes(y=pelvic_tilt)) + geom_boxplot()
+p6=ggplot(df, aes(y=pelvic_incidence)) + geom_boxplot()
+grid.arrange(p1,p2,p3,p4,p5,p6)
+```
+
+Outliers
+
+It appears that we do have a few far outliers that could impact our analysis. We will adjust lumbar_lordosis_angle, degree_spondylolisthesis and sacral_slope as they contain singular outliars that are far removed from the rest of the data.
+
+```{r}
+df <- df %>% filter(degree_spondylolisthesis < 400)
+df <- df %>% filter(sacral_slope < 100)
+df <- df %>% filter(lumbar_lordosis_angle < 100)
+```
+
+```{r}
+str(df)
+skim(df)
+summary(df)
+p1=ggplot(df, aes(y=degree_spondylolisthesis)) + geom_boxplot()
+p2=ggplot(df, aes(y=pelvic_radius)) + geom_boxplot()
+p3=ggplot(df, aes(y=sacral_slope)) + geom_boxplot()
+p4=ggplot(df, aes(y=lumbar_lordosis_angle)) + geom_boxplot()
+p5=ggplot(df, aes(y=pelvic_tilt)) + geom_boxplot()
+p6=ggplot(df, aes(y=pelvic_incidence)) + geom_boxplot()
+grid.arrange(p1,p2,p3,p4,p5,p6)
+```
+
+## Split
+
+Next, to begin a regression analysis, we need to split the data into training and testing sets.
+
+```{r Split}
+set.seed(213) 
+df_split = initial_split(df, prop = 0.7, strata = class)
+train = training(df_split)
+test = testing(df_split)
+levels(train$class)
+```
+
+## Recipe
+
+Now, we put together our recipe for regression analysis and run the functions.
+
+```{r Recipe}
+df_model = 
+  logistic_reg() %>%
+  set_engine("glm")
+
+df_recipe = recipe(class ~ ., train) %>%
+  step_dummy(all_nominal(), -all_outcomes())
+
+logreg_wf = workflow() %>%
+  add_recipe(df_recipe) %>% 
+  add_model(df_model)
+
+df_fit = fit(logreg_wf, train)
+
+summary(df_fit$fit$fit$fit)
+confint(df_fit$fit$fit$fit)
+car::vif(df_fit$fit$fit$fit)
+
+```
+
+## Adjust for Binomial
+
+We have run into a slight complication! Regressions are best with binomials, so now I will adjust the data to run better with these functions. I will change all injury conditions to "abnormal", and then re-run the regression analysis.
+
+```{r}
+df2 <- df %>% mutate(class = ifelse(class == "Normal", "No", "Yes"))
+df2 <- df2 %>% rename("Abnormal" = "class")
+df2 <- df2 %>% mutate(Abnormal = as_factor(Abnormal))
+```
+
+```{r}
+str(df2)
+skim(df2)
+summary(df2)
+```
+
+```{r}
+set.seed(213) 
+df2_split = initial_split(df2, prop = 0.7, strata = Abnormal)
+train = training(df2_split)
+test = testing(df2_split)
+train = train %>% mutate(Abnormal = fct_relevel(Abnormal, c("0","1")))
+levels(train$Abnormal)
+```
+
+```{r}
+df2_model = 
+  logistic_reg() %>% #note the use of logistic_reg
+  set_engine("glm") #standard logistic regression engine is glm
+
+df2_recipe = recipe(Abnormal ~ ., train) %>%
+  step_dummy(all_nominal(), -all_outcomes())
+
+logreg_wf2 = workflow() %>%
+  add_recipe(df2_recipe) %>% 
+  add_model(df2_model)
+
+df2_fit = fit(logreg_wf2, train)
+
+summary(df2_fit$fit$fit$fit)
+confint(df2_fit$fit$fit$fit)
+car::vif(df2_fit$fit$fit$fit)
+```
+
+## Model Fitting
+
+Here we will fit the model we created to the data and see what happens!
+
+```{r TrainPrediction}
+predictions = predict(df2_fit, train, type="prob") #develop predicted probabilities
+head(predictions)
+```
+
+## Run on Test
+
+```{r}
+predictions = predict(df2_fit, train, type="prob")[1]
+head(predictions)
+```
+
+```{r RunTest}
+ROCRpred = prediction(predictions, train$Abnormal) 
+
+ROCRperf = performance(ROCRpred, "tpr", "fpr")
+plot(ROCRperf, colorize=TRUE, print.cutoffs.at=seq(0,1,by=0.1), text.adj=c(-0.2,1.7))
+```
+
+```{r}
+as.numeric(performance(ROCRpred, "auc")@y.values)
+```
+
+```{r}
+opt.cut = function(perf, pred){
+    cut.ind = mapply(FUN=function(x, y, p){
+        d = (x - 0)^2 + (y-1)^2
+        ind = which(d == min(d))
+        c(sensitivity = y[[ind]], specificity = 1-x[[ind]], 
+            cutoff = p[[ind]])
+    }, perf@x.values, perf@y.values, pred@cutoffs)
+}
+print(opt.cut(ROCRperf, ROCRpred))
+```
+
+```{r}
+df2_fit %>% pull_workflow_fit() %>% vip(geom = "point")
+```
+
+## Preliminary Results - A
+
+Based on this analysis, we have a fairly strong method for predicting an "abnormal" condition based on these variables. However, two variables presented with extremely high significance: "pelvic radius" and "degree of spondylolisthesis". Let's adjust our model further to see what will happen with only these two variables.
+
+```{r}
+df3_model = 
+  logistic_reg() %>% 
+  set_engine("glm") 
+
+df3_recipe = recipe(Abnormal ~ pelvic_radius + degree_spondylolisthesis, train) %>%
+  step_dummy(all_nominal(), -all_outcomes()) 
+
+logreg_wf3 = workflow() %>%
+  add_recipe(df3_recipe) %>% 
+  add_model(df3_model)
+
+df3_fit = fit(logreg_wf3, train)
+
+summary(df3_fit$fit$fit$fit)
+confint(df3_fit$fit$fit$fit)
+car::vif(df3_fit$fit$fit$fit)
+ggplot(train,aes(x=pelvic_radius, color=Abnormal, fill=Abnormal)) + geom_histogram() + facet_grid(rows=vars(Abnormal))
+ggplot(train,aes(x=degree_spondylolisthesis, color=Abnormal, fill=Abnormal)) + geom_histogram() + facet_grid(rows=vars(Abnormal))
+ggplot(train, aes(x=pelvic_radius, y=degree_spondylolisthesis, color=Abnormal)) + geom_point()
+ggplot(train, aes(x=pelvic_radius, y=degree_spondylolisthesis, color=Abnormal)) + geom_smooth()
+```
+
+```{r}
+predictions = predict(df3_fit, train, type="prob")
+head(predictions)
+```
+
+```{r}
+predictions = predict(df3_fit, train, type="prob")[1]
+head(predictions)
+```
+
+```{r}
+ROCRpred = prediction(predictions, train$Abnormal) 
+
+ROCRperf = performance(ROCRpred, "tpr", "fpr")
+plot(ROCRperf, colorize=TRUE, print.cutoffs.at=seq(0,1,by=0.1), text.adj=c(-0.2,1.7))
+```
+
+```{r}
+as.numeric(performance(ROCRpred, "auc")@y.values)
+```
+
+```{r}
+opt.cut = function(perf, pred){
+    cut.ind = mapply(FUN=function(x, y, p){
+        d = (x - 0)^2 + (y-1)^2
+        ind = which(d == min(d))
+        c(sensitivity = y[[ind]], specificity = 1-x[[ind]], 
+            cutoff = p[[ind]])
+    }, perf@x.values, perf@y.values, pred@cutoffs)
+}
+print(opt.cut(ROCRperf, ROCRpred))
+```
+
+```{r}
+df3_fit %>% pull_workflow_fit() %>% vip(geom = "point")
+```
+
+## Preliminary Results - B
+
+Now. even though "degree of spondylolisthesis" is a more relevant predictor of "Abnormal" condition, this could also medically be considered a symptom, as it is describing one of the "Abnormal" conditions: spondylolisthesis, a "water is wet" type of scenario. Let's check what happens with only using "pelvic radius".
+
+```{r}
+df4_model = 
+  logistic_reg() %>% 
+  set_engine("glm") 
+
+df4_recipe = recipe(Abnormal ~ pelvic_radius, train) %>%
+  step_dummy(all_nominal(), -all_outcomes()) 
+
+logreg_wf4 = workflow() %>%
+  add_recipe(df4_recipe) %>% 
+  add_model(df4_model)
+
+df4_fit = fit(logreg_wf4, train)
+
+summary(df4_fit$fit$fit$fit)
+confint(df4_fit$fit$fit$fit)
+ggplot(train,aes(x=pelvic_radius, color=Abnormal, fill=Abnormal)) + geom_histogram() + facet_grid(rows=vars(Abnormal))
+ggplot(train,aes(x=pelvic_radius, y=Abnormal, color=Abnormal, fill=Abnormal)) + geom_col(position = "stack")
+```
+
+```{r}
+predictions = predict(df4_fit, train, type="prob")
+head(predictions)
+```
+
+```{r}
+predictions = predict(df4_fit, train, type="prob")[1]
+head(predictions)
+```
+
+```{r}
+ROCRpred = prediction(predictions, train$Abnormal) 
+
+ROCRperf = performance(ROCRpred, "tpr", "fpr")
+plot(ROCRperf, colorize=TRUE, print.cutoffs.at=seq(0,1,by=0.1), text.adj=c(-0.2,1.7))
+```
+
+```{r}
+as.numeric(performance(ROCRpred, "auc")@y.values)
+```
+
+```{r}
+opt.cut = function(perf, pred){
+    cut.ind = mapply(FUN=function(x, y, p){
+        d = (x - 0)^2 + (y-1)^2
+        ind = which(d == min(d))
+        c(sensitivity = y[[ind]], specificity = 1-x[[ind]], 
+            cutoff = p[[ind]])
+    }, perf@x.values, perf@y.values, pred@cutoffs)
+}
+print(opt.cut(ROCRperf, ROCRpred))
+```
+
+```{r}
+trainpredrf = predict(df4_fit, train)
+trainpredrf
+```
+
+```{r}
+confusionMatrix(trainpredrf$.pred_class, train$Abnormal, positive = "Yes")
+```
+
+```{r}
+testpredrf = predict(df4_fit, test)
+
+head(testpredrf)
+
+confusionMatrix(testpredrf$.pred_class, test$Abnormal, 
+
+                positive = "Yes")
+```
+
+## Final Results of Analysis
+
+Removing "degree of spondylolisthesis" reduces the accuracy of the model down to 2/3. Although not a great predictor, this could serve as an indication marker to be on the lookout for symptoms associated with abnormal back conditions.
