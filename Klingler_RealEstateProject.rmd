@@ -1,0 +1,348 @@
+---
+output:
+  html_document: default
+  word_document: default
+---
+# Zillow Home Index Analysis: NC, SC, FL
+## Klingler, Matt
+### June 2023
+
+  
+```{r Setup}
+#Loading libraries
+library(tidyverse)
+library(skimr)
+
+#Load data
+sfSales <- read_csv("SingleFamilyResidenceSales.csv")
+options(scipen=999)
+
+
+
+```
+  
+This data comes from Zillow and was used to explore home values in possible living locations for my family throughout North Carolina, South Carolina, and Florida.  In the early 2010's after a few vacations to South Carolina, we decided to make our home along the coast.  We love the small coastal town atmosphere!  
+
+
+### Set and Clean for NC, SC, FL  
+
+```{r SetClean}
+#Select only NC, SC, FL
+sfhomest <- filter(sfSales, State %in% c("NC", "SC", "FL"))
+
+#Select specified columns
+sfhomest <- select(sfhomest, RegionName, State, CountyName, Metro, "2005-05","2006-05","2007-05","2008-05","2009-05","2010-05","2011-05","2012-05","2013-05","2014-05","2015-05","2016-05","2017-05","2018-05")
+
+#Rename Columns
+sfhomest <- rename(sfhomest,"2005"="2005-05","2006"="2006-05","2007"="2007-05","2008"="2008-05","2009"="2009-05","2010"="2010-05","2011"="2011-05","2012"="2012-05","2013"="2013-05","2014"="2014-05","2015"="2015-05","2016"="2016-05","2017"="2017-05","2018"="2018-05" )
+
+#Clean/Tidy to make easier for analysis
+sfhomest <- sfhomest %>%
+  pivot_longer(c("2005","2006","2007","2008","2009","2010","2011","2012","2013","2014","2015","2016","2017","2018"), names_to="YR",values_to="ZHVI")
+
+```
+
+Here we will further filter down the results for the regions desired and setting the home value threshold at $375,000.  Which for us is still way out of our range, but this is for exploratory purposes after all!  
+
+```{r}
+
+ncsf <- filter(sfhomest, State == "NC" & ZHVI <= 375000)
+ncsf <- filter(ncsf, CountyName %in% c("Craven County", "Onslow County", "Carteret County", "Pender County", "New Hanover County","Brunswick County", "Pamlico County", "Hyde County"))
+
+scsf <- filter(sfhomest, State == "SC" & ZHVI <= 375000)
+scsf <- filter(scsf, CountyName %in% c("Horry County", "Georgetown County", "Charleston County", "Beaufort County", "Jasper County", "Colleton County"))
+
+
+flsf <- filter(sfhomest, State == "FL" & ZHVI <= 375000)
+flsfnorth <- filter(flsf, CountyName %in% c("Nassau County", "Duval County", "Saint Johns County", "Clay County", "Putnam County", "Levy County", "Marion County", "Alachua County", "Citrus County", "Sumter County"))
+
+flsfsouth <- filter(flsf, CountyName %in% c("Collier County", "Lee County", "Charlotte County", "De Soto County", "Hardee County", "Manatee County", "Sarasota County", "Hernando County", "Pasco County", "Polk County"))
+
+
+
+```
+
+
+Great! so now we have selected and cleaned the data for NC, SC, and FL for easier analysis.  Now to begin exploring!  
+
+
+### Explore the Data
+```{r exploreNC}
+
+#Statistical Summary
+summary(ncsf$ZHVI)
+
+#Scatter Plot
+ggplot(ncsf, aes(x=YR, y=ZHVI, color=CountyName)) +
+  geom_point() +
+  theme(axis.text.x = element_text(angle = 90, vjust=0.5)) +
+  scale_y_continuous(name="Home Values (in $)", labels = scales::comma) +
+  labs(title = "NC Home Sales",
+       x="Year")
+
+#Stacked Column Chart
+ggplot(ncsf, aes(x=YR, y=ZHVI, color=CountyName)) +
+  geom_col() +
+  theme(axis.text.x = element_text(angle = 90, vjust=0.5)) +
+  scale_y_continuous(name="Home Values (in $)", labels = scales::comma) +
+  labs(title = "NC Home Sales",
+       x="Year")
+
+#Box and Violin Plot
+ggplot(ncsf, aes(x=CountyName, y=ZHVI, color = CountyName)) +
+  geom_violin() +
+  geom_boxplot(width=0.1)
+
+#Scatter Multiple Plot
+ggplot(ncsf, aes(x=YR, y=ZHVI, color = CountyName)) +
+  geom_point() +
+  facet_wrap(~CountyName) +
+  theme(axis.text.x = element_text(angle = 90, vjust=0.5, size=5)) +
+  scale_y_continuous(name="Home Values (in $)", labels = scales::comma) +
+  labs(title = "County Home Value Comparison",
+       x="Year")
+
+```
+
+```{r exploreSC}
+#Statistical Summary
+summary(scsf$ZHVI)
+
+#Scatter Plot
+ggplot(scsf, aes(x=YR, y=ZHVI, color=CountyName)) +
+  geom_point() +
+  theme(axis.text.x = element_text(angle = 90, vjust=0.5)) +
+  scale_y_continuous(name="Home Values (in $)", labels = scales::comma) +
+  labs(title = "SC Home Sales",
+       x="Year")
+
+#Stacked Column Chart
+ggplot(scsf, aes(x=YR, y=ZHVI, color=CountyName)) +
+  geom_col() +
+  theme(axis.text.x = element_text(angle = 90, vjust=0.5)) +
+  scale_y_continuous(name="Home Values (in $)", labels = scales::comma) +
+  labs(title = "SC Home Sales",
+       x="Year")
+
+#Box and Violin Plot
+ggplot(scsf, aes(x=CountyName, y=ZHVI, color = CountyName)) +
+  geom_violin() +
+  geom_boxplot(width=0.1)
+
+#Scatter Multiple Plot
+ggplot(scsf, aes(x=YR, y=ZHVI, color = CountyName)) +
+  geom_point() +
+  facet_wrap(~CountyName) +
+  theme(axis.text.x = element_text(angle = 90, vjust=0.5, size=5)) +
+  scale_y_continuous(name="Home Values (in $)", labels = scales::comma) +
+  labs(title = "County Home Value Comparison",
+       x="Year")
+```
+
+```{r exploreFL}
+#Statistical Summary
+summary(flsfnorth$ZHVI)
+
+#Scatter Plot
+ggplot(flsfnorth, aes(x=YR, y=ZHVI, color=CountyName)) +
+  geom_point() +
+  theme(axis.text.x = element_text(angle = 90, vjust=0.5)) +
+  scale_y_continuous(name="Home Values (in $)", labels = scales::comma) +
+  labs(title = "FL Home Sales",
+       x="Year")
+
+#Stacked Column Chart
+ggplot(flsfnorth, aes(x=YR, y=ZHVI, color=CountyName)) +
+  geom_col() +
+  theme(axis.text.x = element_text(angle = 90, vjust=0.5)) +
+  scale_y_continuous(name="Home Values (in $)", labels = scales::comma) +
+  labs(title = "FL Home Sales",
+       x="Year")
+```
+
+```{r}
+#Statistical Summary
+summary(flsfsouth$ZHVI)
+
+#Scatter Plot
+ggplot(flsfsouth, aes(x=YR, y=ZHVI, color=CountyName)) +
+  geom_point() +
+  theme(axis.text.x = element_text(angle = 90, vjust=0.5)) +
+  scale_y_continuous(name="Home Values (in $)", labels = scales::comma) +
+  labs(title = "FL Home Sales",
+       x="Year")
+
+#Stacked Column Chart
+ggplot(flsfsouth, aes(x=YR, y=ZHVI, color=CountyName)) +
+  geom_col() +
+  theme(axis.text.x = element_text(angle = 90, vjust=0.5)) +
+  scale_y_continuous(name="Home Values (in $)", labels = scales::comma) +
+  labs(title = "FL Home Sales",
+       x="Year")
+```
+
+
+Ok, so there are quite a bit of possibilities in FL.  NC and SC have a much smaller population density, so there are just over a handful of coastal counties in each.  However, FL has many "coastal" counties that we would consider moving to, which complicates the analysis.  As you can see, I even broke Florida into a north and south, but this still leaves too much to look at.  So now let's group them into more distinct regions: Jacksonville, Ocala, Dade City, and Ft. Myers.
+
+```{r}
+
+flsfjax <- filter(flsf, CountyName %in% c("Nassau County", "Duval County", "Saint Johns County", "Clay County", "Alachua County"))
+
+flsfocala <- filter(flsf, CountyName %in% c("Putnam County", "Levy County", "Marion County", "Citrus County", "Sumter County"))
+
+flsfdadecity <- filter(flsf, CountyName %in% c("Hernando County", "Pasco County", "Polk County", "Hardee County"))
+
+flsfftmyer <- filter(flsf, CountyName %in% c("Manatee County", "Sarasota County", "Charlotte County", "Lee County", "Collier County"))
+
+```
+
+
+```{r}
+#Statistical Summary
+summary(flsfjax$ZHVI)
+
+#Scatter Plot
+ggplot(flsfjax, aes(x=YR, y=ZHVI, color=CountyName)) +
+  geom_point() +
+  theme(axis.text.x = element_text(angle = 90, vjust=0.5)) +
+  scale_y_continuous(name="Home Values (in $)", labels = scales::comma) +
+  labs(title = "FL Home Sales",
+       x="Year")
+
+#Stacked Column Chart
+ggplot(flsfjax, aes(x=YR, y=ZHVI, color=CountyName)) +
+  geom_col() +
+  theme(axis.text.x = element_text(angle = 90, vjust=0.5)) +
+  scale_y_continuous(name="Home Values (in $)", labels = scales::comma) +
+  labs(title = "FL Home Sales",
+       x="Year")
+
+#Box and Violin Plot
+ggplot(flsfjax, aes(x=CountyName, y=ZHVI, color = CountyName)) +
+  geom_violin() +
+  geom_boxplot(width=0.1)
+
+#Scatter Multiple Plot
+ggplot(flsfjax, aes(x=YR, y=ZHVI, color = CountyName)) +
+  geom_point() +
+  facet_wrap(~CountyName) +
+  theme(axis.text.x = element_text(angle = 90, vjust=0.5, size=5)) +
+  scale_y_continuous(name="Home Values (in $)", labels = scales::comma) +
+  labs(title = "County Home Value Comparison",
+       x="Year")
+```
+
+```{r}
+#Statistical Summary
+summary(flsfocala$ZHVI)
+
+#Scatter Plot
+ggplot(flsfocala, aes(x=YR, y=ZHVI, color=CountyName)) +
+  geom_point() +
+  theme(axis.text.x = element_text(angle = 90, vjust=0.5)) +
+  scale_y_continuous(name="Home Values (in $)", labels = scales::comma) +
+  labs(title = "FL Home Sales",
+       x="Year")
+
+#Stacked Column Chart
+ggplot(flsfocala, aes(x=YR, y=ZHVI, color=CountyName)) +
+  geom_col() +
+  theme(axis.text.x = element_text(angle = 90, vjust=0.5)) +
+  scale_y_continuous(name="Home Values (in $)", labels = scales::comma) +
+  labs(title = "FL Home Sales",
+       x="Year")
+
+#Box and Violin Plot
+ggplot(flsfocala, aes(x=CountyName, y=ZHVI, color = CountyName)) +
+  geom_violin() +
+  geom_boxplot(width=0.1)
+
+#Scatter Multiple Plot
+ggplot(flsfocala, aes(x=YR, y=ZHVI, color = CountyName)) +
+  geom_point() +
+  facet_wrap(~CountyName) +
+  theme(axis.text.x = element_text(angle = 90, vjust=0.5, size=5)) +
+  scale_y_continuous(name="Home Values (in $)", labels = scales::comma) +
+  labs(title = "County Home Value Comparison",
+       x="Year")
+```
+
+```{r}
+#Statistical Summary
+summary(flsfdadecity$ZHVI)
+
+#Scatter Plot
+ggplot(flsfdadecity, aes(x=YR, y=ZHVI, color=CountyName)) +
+  geom_point() +
+  theme(axis.text.x = element_text(angle = 90, vjust=0.5)) +
+  scale_y_continuous(name="Home Values (in $)", labels = scales::comma) +
+  labs(title = "FL Home Sales",
+       x="Year")
+
+#Stacked Column Chart
+ggplot(flsfdadecity, aes(x=YR, y=ZHVI, color=CountyName)) +
+  geom_col() +
+  theme(axis.text.x = element_text(angle = 90, vjust=0.5)) +
+  scale_y_continuous(name="Home Values (in $)", labels = scales::comma) +
+  labs(title = "FL Home Sales",
+       x="Year")
+
+#Box and Violin Plot
+ggplot(flsfdadecity, aes(x=CountyName, y=ZHVI, color = CountyName)) +
+  geom_violin() +
+  geom_boxplot(width=0.1)
+
+#Scatter Multiple Plot
+ggplot(flsfdadecity, aes(x=YR, y=ZHVI, color = CountyName)) +
+  geom_point() +
+  facet_wrap(~CountyName) +
+  theme(axis.text.x = element_text(angle = 90, vjust=0.5, size=5)) +
+  scale_y_continuous(name="Home Values (in $)", labels = scales::comma) +
+  labs(title = "County Home Value Comparison",
+       x="Year")
+```
+
+```{r}
+#Statistical Summary
+summary(flsfftmyer$ZHVI)
+
+#Scatter Plot
+ggplot(flsfftmyer, aes(x=YR, y=ZHVI, color=CountyName)) +
+  geom_point() +
+  theme(axis.text.x = element_text(angle = 90, vjust=0.5)) +
+  scale_y_continuous(name="Home Values (in $)", labels = scales::comma) +
+  labs(title = "FL Home Sales",
+       x="Year")
+
+#Stacked Column Chart
+ggplot(flsfftmyer, aes(x=YR, y=ZHVI, color=CountyName)) +
+  geom_col() +
+  theme(axis.text.x = element_text(angle = 90, vjust=0.5)) +
+  scale_y_continuous(name="Home Values (in $)", labels = scales::comma) +
+  labs(title = "FL Home Sales",
+       x="Year")
+
+#Box and Violin Plot
+ggplot(flsfftmyer, aes(x=CountyName, y=ZHVI, color = CountyName)) +
+  geom_violin() +
+  geom_boxplot(width=0.1)
+
+#Scatter Multiple Plot
+ggplot(flsfftmyer, aes(x=YR, y=ZHVI, color = CountyName)) +
+  geom_point() +
+  facet_wrap(~CountyName) +
+  theme(axis.text.x = element_text(angle = 90, vjust=0.5, size=5)) +
+  scale_y_continuous(name="Home Values (in $)", labels = scales::comma) +
+  labs(title = "County Home Value Comparison",
+       x="Year")
+```
+
+Now, this analysis is looking strictly at County level Home Values in order to discern where good options might be to relocate.  However, this does not always mean that they would be the best option, as other factors would come in to play: employment, safety, schools, etc.  
+  
+Solely based on this analysis of Home Values, and considering expected annual income, both NC and SC have reasonable options across their coastal regions.  While FL has affordable options in the Ocala and Date City regions, it is definitely going to require a much more granular analysis depending living conditions mentioned above.  There appear to be select areas in the Jacksonville (Jax) and Ft. Myer regions that are more affordable than others, but those are fewer and farther to find. 
+
+
+
+
+
+  
